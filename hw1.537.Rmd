@@ -1,0 +1,82 @@
+---
+title: "biost537.hw1"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(survival)
+library(flexsurv)
+library(dplyr)
+library(lmtest)
+source("/Users/marcy/Desktop/Survival 537/fitparametric.R")
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+addicts <- read.csv("~/Downloads/addicts.csv")
+head(addicts)
+```
+
+```{r}
+1 - mean(addicts$event)
+sum(addicts$event)
+# creating the survival objects
+surv1 <- with(addicts, Surv(time , event))
+fitexp <- flexsurvreg(surv1~1, dist = "exp")
+fitw <- fitparametric(surv1, dist = "weibull")
+fitg <- fitparametric(surv1, dist = "gengamma")
+## plot
+plot(surv1, conf.int = FALSE, xlab = "Time (in years)",
+ylab = "Survival probability", col = "black", lty = "solid", lwd = 2)
+lines(fitexp, ci = FALSE, col = "darkgreen", lty = "solid", lwd = 2)
+lines(fitw$fit, ci = FALSE, col = "orange", lty = "dashed", lwd = 2)
+lines(fitg$fit, ci = FALSE, col = "blue", lty = "dotted", lwd = 2 )
+legend("topright",c("nonparametric estimator", "exponential", "weibull", "gengamma"), col = c("black", "darkgreen", "orange", "blue"), lty = c("solid", "solid", "dashed", "dotted"),
+lwd = rep(3, 4), cex = 0.9) 
+## d
+T_LRT <- -2 * (fitw$loglik - fitg$loglik)
+1 - pchisq(T_LRT, df = 1)
+## e
+library(numDeriv)
+fit_g <- fitparametric(surv1, dist = "weibull", feature = "quantile")
+fit_e2 <- fitparametric(surv1, dist = "weibull", feature = "survival", t = 365)
+fit_e3 <- fitparametric(surv1, dist = "weibull", feature ="condsurvival", t = 365*2, t0 = 365)
+## f
+T_LRT2 <- -2 * (fitexp$loglik - fitw$loglik)
+1 - pchisq(T_LRT2, df = 1)
+##
+median.weibull <-  function(shape, scale) {
+qweibull (0.5 , shape = shape , scale = scale )}
+
+summary(fitw , fn=median.weibull, t=1,B=10000)
+
+## between groups: clinic
+surv1 <- with(addicts[addicts$clinic == 1, ], Surv(time , event))
+surv2 <- with(addicts[addicts$clinic == 2, ], Surv(time , event))
+fitw.1 <- flexsurvreg(surv1~1, dist = "exp", data  = addicts[addicts$clinic == 1, ])
+fitw.2 <- flexsurvreg(surv2~1, dist = "exp", data = addicts[addicts$clinic == 2, ])
+delta <- fitw.1$res[1] - fitw.2$res[1]
+delta_se <- sqrt(fitw.1$res[4] ^ 2 + fitw.2$res[4] ^ 2)
+T_W <- abs(delta) / delta_se 
+2 * pnorm(-T_W)
+## between groups: prison
+surv1h <- with(addicts[addicts$prison == 0, ], Surv(time , event))
+surv2h <- with(addicts[addicts$prison == 1, ], Surv(time , event))
+fitw.1h <- flexsurvreg(surv1h~1, dist = "exp", data  = addicts[addicts$prison == 0, ])
+fitw.2h <- flexsurvreg(surv2h~1, dist = "exp", data = addicts[addicts$prison == 1, ])
+delta.h <- fitw.1h$res[1] - fitw.2h$res[1]
+delta_se.h <- sqrt(fitw.1h$res[4] ^ 2 + fitw.2h$res[4] ^ 2)
+T_W.h <- abs(delta.h) / delta_se.h 
+2 * pnorm(-T_W.h)
+
+```
+
+

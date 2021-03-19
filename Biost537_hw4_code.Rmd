@@ -1,0 +1,105 @@
+---
+title: "Biost537_hw4"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(flexsurv)
+library(survival)
+library(msm)
+library(dplyr)
+```
+
+## Question 1
+a)
+```{r}
+addicts <- read.csv("~/Downloads/addicts.csv")
+head(addicts)
+# fit a coxph first
+cox1 <- coxph(Surv(time, event)~dose+as.factor(clinic)+as.factor(prison), 
+              data = addicts)
+# fit a weibull AFT model
+weibull1 <- flexsurvreg(Surv(time, event)~dose+as.factor(clinic)+as.factor(prison)
+                        , data = addicts, dist = "weibull")
+gen1 <- flexsurvreg(Surv(time, event)~dose+as.factor(clinic)+as.factor(prison),
+                    data = addicts, dist = "gengamma")
+
+```
+b)
+Mean
+```{r}
+#group1 <- exp(weibull1$coefficients[3]*40+weibull1$coefficients[4])
+#group2 <- exp(weibull1$coefficients[3]*100+weibull1$coefficients[5])
+ratio <- exp(weibull1$coefficients[3]*-60 + weibull1$coefficients[4] 
+             - weibull1$coefficients[5])
+se <- deltamethod(g = ~ exp(-60*x1 + x2 - x3),
+  mean = coef(weibull1)[c("dose", "as.factor(clinic)2", "as.factor(prison)1")],
+  cov = vcov(weibull1)[c("dose", "as.factor(clinic)2", "as.factor(prison)1"), 
+   c("dose", "as.factor(clinic)2", "as.factor(prison)1")])
+c(ratio, ratio-1.96*se, ratio+1.96*se)
+```
+Median
+```{r}
+# for the baseline
+median <- exp(coef(weibull1)["scale"]) * log(2)^{1 / exp(coef(weibull1)["shape"])}
+g1 <- exp(weibull1$coefficients[3]*40+weibull1$coefficients[4])
+g2 <- exp(weibull1$coefficients[3]*100+weibull1$coefficients[5])
+# for the first group
+est1 <- g1 * median
+se1 <- deltamethod(g = ~ exp(40*x1 + 1*x2)*log(2)^(1 / exp(x3)) * exp(x4),
+                   mean = coef(weibull1)[c("dose", "as.factor(clinic)2","shape","scale")],
+                   cov = vcov(weibull1)[c("dose", "as.factor(clinic)2","shape","scale"), 
+                                        c("dose", "as.factor(clinic)2","shape","scale")])
+c(est1, est1-1.96*se1, est1+1.96*se1)
+# for the second group
+est2 <- g2 * median
+se2 <- deltamethod(g = ~ exp(100*x1 + 1*x2)*log(2)^(1 / exp(x3)) * exp(x4),
+                   mean = coef(weibull1)[c("dose", "as.factor(prison)1","shape","scale")],
+                   cov = vcov(weibull1)[c("dose", "as.factor(prison)1","shape","scale"), 
+                                        c("dose", "as.factor(prison)1","shape","scale")])
+c(est2, est2-1.96*se2, est2+1.96*se2)
+```
+
+c)
+```{r}
+weibull2 <- flexsurvreg(Surv(time, event)~dose*as.factor(prison)+as.factor(clinic), 
+                        data = addicts, dist = "weibull")
+weibull2
+# for comparing such individuals without a history of prison
+g3 <- exp(weibull2$coefficients[3]*20)
+se3 <- deltamethod(g = ~ exp(20*x1),
+                   mean = coef(weibull2)["dose"],
+                   cov = vcov(weibull2)["dose", "dose"])
+c(g3, g3-1.96*se3, g3+1.96*se3)
+# for comparing such individuals with a history of prison
+g4 <- exp(weibull2$coefficients[3]*20+weibull2$coefficients[6]*20)
+se4 <- deltamethod(g = ~ exp(20*x1+20*x2),
+                   mean = coef(weibull2)[c("dose","dose:as.factor(prison)1")],
+                   cov = vcov(weibull2)[c("dose","dose:as.factor(prison)1"),      
+                                        c("dose","dose:as.factor(prison)1")])
+c(g4, g4-1.96*se4, g4+1.96*se4)
+```
+
+# Question 2
+```{r}
+diabetes <- read.csv("~/Downloads/diabetes.csv")
+##### fit kaplan meier with delayed entry
+control_eye <- diabetes %>% filter(treat == 0)
+s.blindness <- with(control_eye, Surv(age,(time/12)+age, status))
+km.blind <- survfit(s.blindness~1)
+# summary(km.addicts, times = 365)
+# plot KM
+plot(km.blind ,main="Kaplan Meier survivor estimate (w/ delayed entry)", 
+     ylab="Survival probability",xlab="Age",cex=1.5)
+print(km.blind)
+
+##### plot KM without delayed entry
+s.blindness2 <- with(control_eye, Surv(time/12+age, status))
+km.blind2 <- survfit(s.blindness2~1,conf.type = "log-log")
+plot(km.blind2 ,main="Kaplan Meier survivor estimate (w/o delayed entry)",
+     ylab="Survival probability",xlab="Age",cex=1.5)
+print(km.blind2)
+```

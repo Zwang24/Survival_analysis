@@ -1,0 +1,148 @@
+---
+title: "537.project"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+bmt.2 <- read.csv("~/Downloads/bmt-2.csv")
+library(table1)
+library(survival)
+library(flexsurv)
+source("/Users/marcy/Desktop/Survival 537/fitparametric.R")
+```
+
+## characteristics
+```{r}
+head(bmt.2)
+#deltaa: aGVHD indicator
+#deltar: relapse indicator
+#ta: time until aGVHD
+sum(bmt.2$deltap)
+sum(bmt.2$deltaa)
+mean(bmt.2$ta)
+mean(bmt.2$tp)
+```
+
+## Disease free survival
+```{r}
+s.disease <- with(bmt.2, Surv(tdfs, deltadfs))
+km.disease <- survfit(s.disease~1, conf.type = "log-log")
+# summary(km.addicts, times = 365)
+# plot KM
+plot(km.disease ,main="Kaplan Meier survivor estimate of disease free survival", 
+     ylab="Survival probability",xlab="Days",cex=1.5)
+
+```
+
+## Table 1
+```{r}
+dat <- bmt.2
+dat$aml <- factor(dat$disgroup, levels=c(1,2,3),
+                 labels=c("Acute lymphoblastic leukemia", "Acute myelocytic leukemia", "AML High risk"))
+dat$gender <- factor(dat$male, levels = c(1,0), labels = c("Male","Female"))
+dat$cmv <- factor(dat$cmv, levels = c(1,0), labels = c("CMV positive","CMV negative"))
+dat$gender <- factor(dat$male, levels = c(1,0), labels = c("Male","Female"))
+dat$donorgender <- factor(dat$donormale, levels = c(1,0), labels = c("Male","Female"))
+dat$donorcmv <- factor(dat$donorcmv, levels = c(1,0), labels = c("CMV positive","CMV negative"))
+dat$fab <- factor(dat$fab,  levels = c(1,0), labels = c("FAB grade 4 or 5", "AML 0"))
+dat$site <- factor(dat$hospital, levels = c(1,2,3,4), 
+                   labels = c("The Ohio State University", "Alfred","St. Vincent", "Hahnemann"))
+dat$mtx <- factor(dat$mtx, levels = c(1,0), labels = c("Prophylactic use of methotrexate", "No use"))
+dat$deltaa <- factor(dat$deltaa, levels = c(1,0), labels = c("aGVHD", "No aGVHD"))
+label(dat$aml) <- "Leukemia status"
+label(dat$age) <- "Patient age"
+label(dat$gender) <- "Patient sex"
+label(dat$donorage) <- "Donor age"
+label(dat$donorgender) <- "Donor sex"
+label(dat$cmv) <- "Patient CMV status"
+label(dat$donorcmv) <- "Donor CMV status"
+label(dat$waittime) <- "Waiting time until transplant"
+label(dat$fab) <- "Disease subtype"
+label(dat$site) <- "Hospital sites"
+label(dat$mtx) <- "Prophylactic use of methotrexate"
+label(dat$deltaa) <- "aGVHD status"
+# based on disgroup
+tab1 <- table1(~aml+age+gender+donorgender+cmv+donorcmv+fab+site+waittime+mtx|aml, data = dat)
+# based on fab
+tab2 <- table1(~aml+age+gender+donorgender+cmv+donorcmv+deltaa+site+waittime+mtx|fab, data = dat)
+```
+## Q4
+Confounders used are donor age, donor gender, patient age, patient gender, hospital stratified and disease group
+```{r}
+# km plot
+s.aGVHD <- with(bmt.2, Surv(ta, deltaa))
+km.aGVHD <- survfit(s.disease~deltaa, data = bmt.2)
+# plot KM
+plot(km.aGVHD ,main="Kaplan Meier survivor estimate of disease free survival", 
+     ylab="Survival probability",xlab="Days",cex=1.5)
+coxph(s.disease~deltaa,data = bmt.2)
+# time varying
+tvc <- tmerge(data1 = bmt.2,
+              data2 = bmt.2,
+              id = id,
+              deltadfs = event(tdfs, deltadfs),
+              postaGVHD = tdc(ta))
+surv.tvc = Surv(tvc$tstart, tvc$tstop , tvc$deltadfs) 
+coxph(surv.tvc~ postaGVHD + strata(hospital) + age+male+donorage+donormale+strata(hospital)+as.factor(disgroup) , data=tvc)
+# relapse
+s.relapse <- with(bmt.2, Surv(tdfs, deltar))
+tvc.r <- tmerge(data1 = bmt.2,
+              data2 = bmt.2,
+              id = id,
+              deltar = event(tdfs, deltar),
+              postaGVHD.r = tdc(ta))
+surv.tvc.r = Surv(tvc.r$tstart, tvc.r$tstop , tvc.r$deltar) 
+coxph(surv.tvc.r~ postaGVHD.r +age+male+donorage+donormale+strata(hospital)+disgroup, data=tvc.r)
+```
+## Q6
+```{r}
+# fitting the survival curve with different distributions
+fitexp <- fitparametric(s.aGVHD, dist = "exp")
+fitw <- fitparametric(s.aGVHD, dist = "weibull")
+fitgg <- fitparametric(s.aGVHD, dist = "gengamma")
+# plot
+plot(s.aGVHD, conf.int = FALSE, xlab = "Time (in years)",
+ylab = "Survival probability", col = "black", lty = "solid", lwd = 2)
+lines(fitexp$fit, ci = FALSE, col = "darkgreen", lty = "solid", lwd = 2)
+lines(fitw$fit, ci = FALSE, col = "orange", lty = "dashed", lwd = 2)
+lines(fitgg$fit, ci = FALSE, col = "blue", lty = "dotted", lwd = 2 )
+legend("topright",c("nonparametric estimator", "exponential", "weibull", "gengamma"), col = c("black", "darkgreen", "orange", "blue"), lty = c("solid", "solid", "dashed", "dotted"),
+lwd = rep(3, 4), cex = 0.6) 
+
+# fitting the parametric model w/Weibull
+s.agvhd1 <- with(bmt.2[bmt.2$mtx == 1, ], Surv(ta, deltaa))
+s.agvhd2 <- with(bmt.2[bmt.2$mtx == 0, ], Surv(ta, deltaa))
+fitw.1 <- flexsurvreg(s.agvhd1~age+male+as.factor(fab)+donorage+donormale, dist = "weibull", data  = bmt.2[bmt.2$mtx == 1, ])
+fitw.2 <- flexsurvreg(s.agvhd2~age+male+as.factor(fab)+donorage+donormale, dist = "weibull", data = bmt.2[bmt.2$mtx == 0, ])
+
+```
+
+## Q7
+```{r}
+# km plot
+s.platelet <- with(bmt.2, Surv(tp, deltap))
+km.platelet <- survfit(s.disease~deltap, data = bmt.2)
+# plot KM
+plot(km.platelet ,main="Kaplan Meier survivor estimate of disease free survival", 
+     ylab="Survival probability",xlab="Days",cex=1.5)
+coxph(s.disease~deltaa,data = bmt.2)
+# time varying
+tvc.tp <- tmerge(data1 = bmt.2,
+              data2 = bmt.2,
+              id = id,
+              deltadfs = event(tdfs, deltadfs),
+              post.tp = tdc(tp))
+surv.tp = Surv(tvc.tp$tstart, tvc.tp$tstop , tvc.tp$deltadfs) 
+coxph(surv.tp~ post.tp + strata(hospital) + age+male+donorage+donormale+waittime+disgroup , data=tvc.tp)
+# relapse
+s.relapse <- with(bmt.2, Surv(tdfs, deltar))
+tvc.tp.r <- tmerge(data1 = bmt.2,
+              data2 = bmt.2,
+              id = id,
+              deltar = event(tdfs, deltar),
+              post.tp.r = tdc(tp))
+surv.tp.r = Surv(tvc.tp.r$tstart, tvc.tp.r$tstop , tvc.tp.r$deltar) 
+coxph(surv.tp.r~ post.tp.r +age+male+donorage+donormale+waittime+disgroup, data=tvc.tp.r)
+
+```

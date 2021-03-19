@@ -1,0 +1,68 @@
+---
+title: "bio537_hw3"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(survival)
+library(dplyr)
+library(msm)
+```
+
+# Problem 1
+```{r}
+ccg <- read.csv("~/Downloads/ccg803.csv")
+head(ccg)
+fit1 <- coxph(Surv(duration, relapse)~rx, data = ccg)
+summary(fit1)
+fit2 <- coxph(Surv(duration, relapse)~rx+age+wbc, data = ccg)
+summary(fit2)
+ccg$dich_wbc <- ifelse(ccg$wbc < 100, 0, 1)
+
+
+fit3 <- coxph(Surv(duration, relapse)~rx*dich_wbc+age, data = ccg)
+summary(fit3)
+estQ1 <- exp(coef(fit3)["rx"] + coef(fit3)["rx:dich_wbc"])
+seQ1 <- deltamethod(g = ~ exp(x1 + x2), mean = coef(fit3)[c("rx", "rx:dich_wbc")],
+                  cov = vcov(fit3)[c("rx", "rx:dich_wbc"), c("rx", "rx:dich_wbc")])
+c(estQ1 - 1.96*seQ1, estQ1 + 1.96*seQ1)
+
+
+fit4 <- coxph(Surv(duration,relapse)~rx+age+wbc+strata(institution),data = ccg)
+summary(fit4)
+profile1 <- data.frame(age = 5, rx = 1, wbc = 40)
+profile2 <- data.frame(age = 5, rx = 0, wbc = 40)
+profile3 <- data.frame(age = 5, rx = 1, wbc = 200)
+profile4 <- data.frame(age = 5, rx = 0, wbc = 200)
+plot(survfit(fit2, newdata = profile1), col = "blue",
+lwd = 1)
+lines(survfit(fit2, newdata = profile2), col = "orange",
+lwd = 1)
+lines(survfit(fit2, newdata = profile3), col = "green",
+lwd = 1)
+lines(survfit(fit2, newdata = profile4), col = "red",
+lwd = 1)
+legend("topright", legend = c("5 year-old treated patients with wbc = 40", "5 year-old control patients with wbc = 40", "5 year-old treated patients with wbc = 200","5 year-old control patients with wbc = 200"),
+col = c("blue", "orange","green","red"), lty = rep(1, 2), lwd = rep(2, 2), cex = 1, bty = "n")
+```
+
+```{r}
+addicts <- read.csv("~/Downloads/addicts.csv")
+fit5 <- coxph(Surv(time, event)~as.factor(prison)+as.factor(clinic)+dose, data = addicts)
+summary(fit5)
+fit6 <- coxph(Surv(time,event)~dose+prison+strata(clinic), data = addicts)
+summary(fit6)
+fit7 <- coxph(Surv(time,event)~dose*prison+strata(clinic), data = addicts)
+summary(fit7)
+est <- (70*coef(fit7)["dose"]
+ + 1 * coef(fit7)["prison"]
++ 120 * coef(fit7)["dose:prison"])
+exp(est)
+# calculate se
+se <- deltamethod(g = ~ ((70 * x1 + 1 * x2 + 120 * x3)),
+mean = coef(fit7)[c("dose", "prison", "dose:prison")],
+cov = vcov(fit7)[c("dose", "prison", "dose:prison"),c("dose", "prison", "dose:prison")])
+exp(c(est - 1.96 * se, est + 1.96 * se))
+```

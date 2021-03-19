@@ -1,0 +1,106 @@
+---
+title: "537_hw2"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(muhaz)
+library(survival)
+library(dplyr)
+addicts <- read.csv("~/Downloads/addicts.csv")
+library(survMisc)
+source("/Users/marcy/Desktop/Survival 537/getmedianres.R")
+```
+
+# problem 2
+```{r}
+# fit KM
+s.events <- with(addicts, Surv(time, event))
+km.addicts <- survfit(s.events~1, conf.type = "log-log")
+
+summary(km.addicts, times = 365)
+# plot KM
+plot(km.addicts ,main="Kaplan ́Meier survivor estimate", ylab="Survival probability",xlab="Time (in days)",cex=1.5)
+# km between groups
+km1c <- with(addicts[addicts$prison == 0, ], Surv(time , event))
+km2c <- with(addicts[addicts$prison == 1, ], Surv(time , event))
+# OR
+kmc <- survfit(s.events~prison, data = addicts, conf.type = "log-log")
+plot(kmc, col=c("blue","orange"), xlab="Maintenance time", main="Kaplan ́Meier survival estimates")
+legend("topright", c("Incarceration = 0","Incarceration = 1"), col=c("blue", "orange"), lwd=c (2 , 2) , cex =1.2)
+# test for difference at specific time point probs
+s <- summary(kmc, times=8*30)
+diff <- s$surv[1] - s$surv[2]
+se <- sqrt(s$std.err[2] ** 2 + s$std.err[1] ** 2) 
+(1 - pnorm(diff / se))*2
+# logrank test
+survdiff(s.events~prison, data=addicts)
+# Wilcoxon
+# use the Z score to calculate p
+comp(ten(kmc))$tests$lrTests # z = 1.6
+2 * pnorm(-abs(1.6))
+# using rho, not used for the hw
+survdiff(s.events~prison, data=addicts, rho = 1)
+
+# plot estimated hazard function
+yes.prison <- addicts %>% filter(prison == 1)
+no.prison <- addicts %>% filter(prison == 0)
+haz1 <- muhaz(yes.prison$time, yes.prison$event)
+haz2 <- muhaz(no.prison$time, no.prison$event)
+plot(haz1, lwd=3, col="blue", main="Estimated hazard of event", xlab="time (in days)", ylab="hazard", ylim=c(0,0.01))
+lines(haz2, lwd=3, col="red")
+# plot the estimated cumulative hazard function
+plot(kmc, fun="cumhaz", col=c("blue","orange"), xlab="Maintenance time", ylab="Cumulative hazard",main="Cumulative hazard function for the two groups")
+legend("bottomright", c("Incarceration = 0","Incarceration = 1"), col=c("blue", "orange"), lwd=c (2 , 2) , cex =1.2)
+
+```
+# Problem 2d,e and f
+```{r}
+# plot the KM curve
+addicts$dich <- ifelse(addicts$dose > 60, 1, 0)
+kmd <- survfit(s.events~dich, data = addicts, conf.type = "log-log")
+plot(kmd, col=c("blue","orange"), xlab="Maintenance time", main="Kaplan ́Meier survival estimates")
+legend("topright", c("Methadone <= 60","Methadone > 60"), col=c("blue", "orange"), lwd=c (2 , 2) , cex =1.2)
+# test for difference at specific time point probs
+s.d <- summary(kmd, times=8*30)
+diff.d <- s.d$surv[2] - s.d$surv[1]
+se.d <- sqrt(s.d$std.err[2] ** 2 + s.d$std.err[1] ** 2) 
+(1 - pnorm(diff.d / se.d))*2
+# logrank test
+survdiff(s.events~dich, data=addicts)
+# Wilcoxon
+comp(ten(kmd))$tests$lrTests # z = -4.95
+2 * pnorm(-abs(-4.95))
+# using rho, not for HW
+survdiff(s.events~dich, data=addicts, rho = 1)
+# plot estimated hazard function
+plot(kmd, fun="cumhaz", col=c("blue","orange"), xlab="Maintenance time", ylab="Cumulative hazard",main="Cumulative hazard function for the two groups")
+legend("topleft", c("Methadone <= 60","Methadone > 60"), col=c("blue", "orange"), lwd=c (2 , 2) , cex =1.2)
+
+# problem 2e
+survdiff(s.events ~ prison + strata(clinic), data=addicts)
+
+# problem 2f
+getmedianres(s.events, times = 4*30, confint = TRUE)
+getmedianres(s.events, times = 8*30, confint = TRUE)
+getmedianres(s.events, times = 365, confint = TRUE)
+
+# calcuting by hand
+# 4 months
+summary(km.addicts, times = 120) # the esimate of S(t0) is 0.884
+0.5*0.884 # the samllest time t* = 0.422
+m4 <- summary(km.addicts, times = seq(from = 450, to = 700, by = 2))
+
+# 8 months
+summary(km.addicts, times = 240) # the esimate of S(t0) is 0.715
+0.5*0.715 # the samllest time t* = 0.3575
+m8 <- summary(km.addicts, times = seq(from = 500, to = 800, by = 2))
+
+# 12 months
+summary(km.addicts, times = 365) # the esimate of S(t0) is 0.715
+0.5*0.606 # the samllest time t* = 0.303
+m12 <- summary(km.addicts, times = seq(from = 600, to = 850, by = 2))
+```
